@@ -1,20 +1,73 @@
 #!/usr/bin/env python3
 
-import subprocess as sp
+import sys
+import numpy as np
 import datetime as dt
+import subprocess as sp
 
-proc = sp.Popen(['ls -htral --full-time Soln*'], stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
+# Check for list of files
+argList = sys.argv[1:]
+if len(argList) == 0:
+    print("Please specify files :(\n")
+    exit()
+
+# If a single word is given instead of a list, use wildcard
+if len(argList) == 1:
+    fExt = '*' + argList[0] + '*'
+else:
+    fExt = ' '.join(argList)
+
+# Find files using stat instead of ls - thanks to [1]
+proc = sp.Popen(['stat -c "%y %s %n" -- ' + fExt], stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
 o, e = proc.communicate()
 
 ol = o.decode('ascii').split('\n')[:-1]
+if len(ol) == 0:
+    print("Could not find files with that name :(\n")
+    exit()
+
 tl = []
 for el in ol:
     spList = el.split(' ')
-    sTime = spList[5] + " " + spList[6][:-3]
-    tl.append((spList[-1], dt.datetime.strptime(sTime, "%Y-%m-%d %H:%M:%S.%f")))
+    sTime = spList[0] + " " + spList[1][:-3]
+    dtVal = dt.datetime.strptime(sTime, "%Y-%m-%d %H:%M:%S.%f")
+    tl.append((spList[-1], dtVal))
 
-print(tl[0][0] + "\t{0:.2f}".format(0.0))
+# Sort list of tuples by the second datetime element, thanks to [2]
+tl = sorted(tl, key=lambda tup: tup[1])
+
+maxFNLen = max([max([len(x[0]) for x in tl]), 10])
+expRLen = maxFNLen + 14
+headerLine = '-'*expRLen
+
+print(headerLine)
+print("Filename" + (maxFNLen - 4)*' ' + "Time (s)")
+print(headerLine)
+
+sList = []
+rightPad = 4 + (maxFNLen - len(tl[0][0]))
+print(tl[0][0] + " "*rightPad + "{0:.2f}".format(0.0))
 for i in range(1, len(tl)):
     tdel = tl[i][1] - tl[i-1][1]
     secs = tdel.total_seconds()
-    print(tl[i][0] + "\t{0:.2f}".format(secs))
+    sList.append(secs)
+    rightPad = 4 + (maxFNLen - len(tl[i][0]))
+    print(tl[i][0] + " "*rightPad +  "{0:.2f}".format(secs))
+
+# Filter out outliers as much as possible by considering numbers within 3 sigma
+sList = np.array(sList)
+meanVal = np.mean(sList)
+stdVal = np.std(sList)
+goodInds = np.where((sList > meanVal - 3*stdVal) & (sList < meanVal + 3*stdVal))
+goodVals = sList[goodInds]
+
+# Print average times from filtered data and predict expected time for next file
+avgTime = np.mean(goodVals)
+atHMS = str(dt.timedelta(seconds=avgTime)).split(".")[0]
+print("\nAverage time taken is: {0:.2f} (".format(avgTime) + atHMS + ")")
+nextFileDT = tl[-1][1] + dt.timedelta(seconds=avgTime)
+print("\nNext file can be expected at " + str(nextFileDT.replace(microsecond=0)))
+print()
+
+# [1] https://unix.stackexchange.com/questions/22218/linux-ls-to-show-only-file-name-date-and-size
+# [2] https://stackoverflow.com/questions/3121979/how-to-sort-a-list-tuple-of-lists-tuples-by-the-element-at-a-given-index
