@@ -38,11 +38,11 @@ tl = sorted(tl, key=lambda tup: tup[1])
 
 maxFNLen = max([max([len(x[0]) for x in tl]), 10])
 expRLen = maxFNLen + 14
-headerLine = '-'*expRLen
+dividerLine = '-'*expRLen
 
-print(headerLine)
+print(dividerLine)
 print("Filename" + (maxFNLen - 4)*' ' + "Time (s)")
-print(headerLine)
+print(dividerLine)
 
 sList = []
 rightPad = 4 + (maxFNLen - len(tl[0][0]))
@@ -54,19 +54,26 @@ for i in range(1, len(tl)):
     rightPad = 4 + (maxFNLen - len(tl[i][0]))
     print(tl[i][0] + " "*rightPad +  "{0:.2f}".format(secs))
 
-# Filter out outliers as much as possible by considering numbers within 3 sigma
-sList = np.array(sList)
-meanVal = np.mean(sList)
-stdVal = np.std(sList)
-goodInds = np.where((sList > meanVal - 3*stdVal) & (sList < meanVal + 3*stdVal))
-goodVals = sList[goodInds]
+print(dividerLine)
 
-# Print average times from filtered data and predict expected time for next file
-avgTime = np.mean(goodVals)
+if len(sList) > 1:
+    # Filter out outliers as much as possible by considering numbers within 3 sigma
+    sList = np.array(sList)
+    meanVal = np.mean(sList)
+    stdVal = np.std(sList)
+    goodInds = np.where((sList > meanVal - 3*stdVal) & (sList < meanVal + 3*stdVal))
+    goodVals = sList[goodInds]
+
+    # Print average times from filtered data and predict expected time for next file
+    avgTime = np.mean(goodVals)
+else:
+    avgTime = sList[0]
+
 atHMS = str(dt.timedelta(seconds=avgTime)).split(".")[0]
-print("\nAverage time taken is: {0:.2f} (".format(avgTime) + atHMS + ")")
+print("Average time taken is: {0:.2f} s (".format(avgTime) + atHMS + ")")
+print()
 nextFileDT = tl[-1][1] + dt.timedelta(seconds=avgTime)
-print("\nNext file can be expected at " + str(nextFileDT.replace(microsecond=0)))
+print("Next file can be expected at " + str(nextFileDT.replace(microsecond=0)))
 print()
 
 # [1] https://unix.stackexchange.com/questions/22218/linux-ls-to-show-only-file-name-date-and-size
